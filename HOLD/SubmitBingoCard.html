@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit New Bingo Card</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        form { margin-top: 20px; }
+        input { width: 100px; margin: 5px; text-align: center; }
+        .bingoGrid { display: grid; grid-template-columns: repeat(5, 100px); gap: 5px; justify-content: center; }
+        .bingoCell { width: 100px; height: 30px; text-align: center; }
+        button { margin-top: 10px; padding: 10px; font-size: 16px; }
+        .error { color: red; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Submit a New Bingo Card</h1>
+    <form id="bingoForm">
+        <div class="bingoGrid">
+            <script>
+                for (let r = 1; r <= 5; r++) {
+                    for (let c = 1; c <= 5; c++) {
+                        let cellId = `R${r},C${c}`;
+                        let isFreeSpace = cellId === "R3,C3";
+                        document.write(
+                            `<input class="bingoCell" name="${cellId}" ${isFreeSpace ? 'value="FREE" readonly' : 'placeholder="NFT ID"'}>`
+                        );
+                    }
+                }
+            </script>
+        </div>
+        <br>
+        <input type="text" id="username" name="username" placeholder="X Username" required>
+        <input type="text" id="wallet" name="wallet" placeholder="Wallet Address" required>
+        <br><br>
+        <button type="submit">Submit Bingo Card</button>
+    </form>
+
+    <p id="status"></p>
+    <p class="error" id="errorMessage"></p>
+
+    <script>
+        document.getElementById("bingoForm").addEventListener("submit", async function(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const bingoCard = {};
+            let errorMessage = "";
+            const seenNFTs = new Set();
+
+            for (let [key, value] of formData.entries()) {
+                if (key.startsWith("R")) {
+                    if (key === "R3,C3") {
+                        bingoCard[key] = "FREE"; // Always set FREE space
+                    } else {
+                        let nftId = parseInt(value, 10);
+                        if (isNaN(nftId) || nftId < 1 || nftId > 6666) {
+                            errorMessage = "All NFT IDs must be numbers between 1 and 6666.";
+                            break;
+                        }
+                        if (seenNFTs.has(nftId)) {
+                            errorMessage = "Duplicate NFT IDs are not allowed.";
+                            break;
+                        }
+                        seenNFTs.add(nftId);
+                        bingoCard[key] = nftId.toString();
+                    }
+                }
+            }
+
+            if (errorMessage) {
+                document.getElementById("errorMessage").innerText = errorMessage;
+                return;
+            }
+
+            document.getElementById("errorMessage").innerText = "";
+
+            const requestData = {
+                username: formData.get("username"),
+                wallet: formData.get("wallet"),
+                bingo: bingoCard
+            };
+
+            const response = await fetch("http://localhost:3000/add-bingo-card", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestData)
+            });
+
+            const result = await response.json();
+            document.getElementById("status").innerText = result.message;
+
+            // Clear form after 5 seconds
+            setTimeout(() => {
+                document.getElementById("bingoForm").reset();
+                document.querySelectorAll(".bingoCell").forEach(cell => {
+                    if (cell.name === "R3,C3") {
+                        cell.value = "FREE";
+                    } else {
+                        cell.value = "";
+                    }
+                });
+                document.getElementById("status").innerText = "";
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

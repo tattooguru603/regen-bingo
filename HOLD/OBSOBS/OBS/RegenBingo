@@ -1,0 +1,89 @@
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+
+// Load JSON and CSV files
+const RegensTraitPath = path.join(__dirname, 'AllRegens.json');
+const BingoCardPath = path.join(__dirname, 'BingoCards.json');
+const UniqueTraitsPath = path.join(__dirname, 'unique_traits.csv');
+
+const RegenTraits = JSON.parse(fs.readFileSync(RegensTraitPath, 'utf8'));
+const BingoCards = JSON.parse(fs.readFileSync(BingoCardPath, 'utf8'));
+const uniqueTraits = fs.readFileSync(UniqueTraitsPath, 'utf8')
+  .split('\n')
+  .map(line => line.split(','))
+  .filter(line => line.length === 2);
+
+let matchingNftIds = [];
+let matchingWallets = [];
+
+// Shuffle traits for random selection
+const shuffledTraits = uniqueTraits.sort(() => 0.5 - Math.random());
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+async function processTraits() {
+  for (const [traitType, traitValue] of shuffledTraits) {
+    console.log(`Next Trait: ${traitType} - ${traitValue}`);
+    
+    matchingNftIds = RegenTraits
+      .filter(nft => nft.data && nft.data.nft && Array.isArray(nft.data.nft.traits))
+      .filter(nft => nft.data.nft.traits.some(trait => trait.trait_type === traitType && trait.value === traitValue))
+      .map(nft => nft.nftId.toString());
+
+    let updatedNodes = [];
+    let updatedEntries = [];
+    if (matchingNftIds.length > 0) {
+      // Update all matching fields in BingoCards immediately
+      BingoCards.forEach(entry => {
+        let entryUpdated = false;
+        Object.keys(entry).forEach(key => {
+          if (matchingNftIds.includes(entry[key])) {
+            entry[key] = entry[key].includes("HIT") ? entry[key] : `${entry[key]},HIT`;
+            updatedNodes.push(`${key}: ${entry[key]}`);
+            entryUpdated = true;
+          }
+        });
+        if (entryUpdated) {
+          updatedEntries.push({ wallet: entry["ETH/Base wallet for prizes:"], updatedNodes });
+        }
+      });
+      
+      // Write updated BingoCards.json after each trait match
+      fs.writeFileSync(BingoCardPath, JSON.stringify(BingoCards, null, 2));
+      
+      console.log("Updated Nodes:", updatedNodes.length > 0 ? updatedNodes.join(', ') : "None");
+      console.log("Updated Entries with Wallets:", updatedEntries);
+    }
+
+    // Find wallet addresses for nodes that meet the criteria
+    const requiredHits = ["R3,C1", "R3,C2", "R3,C3", "R4,C3", "R5,C3", "R3,C1", "R3,C2", "R3,C4", "R3,C5"];
+    matchingWallets = BingoCards.filter(entry =>
+      requiredHits.every(field => entry[field] && entry[field].slice(-3) === "HIT")
+    ).map(entry => entry["ETH/Base wallet for prizes:"]);
+    
+    // Stop looping once we find at least one matching wallet
+    if (matchingWallets.length > 0) {
+      console.log("Matching wallet found! Stopping search.");
+      break;
+    }
+    
+    // Prompt user to continue or exit
+    const userResponse = await new Promise(resolve => {
+      rl.question("Continue to next trait? (yes/no): ", answer => resolve(answer));
+    });
+    if (userResponse.toLowerCase() !== 'yes') {
+      console.log("User chose to exit.");
+      break;
+    }
+  }
+  
+  rl.close();
+  console.log('Updated output.json with HIT values where applicable.');
+  console.log('Final matching wallet addresses:', matchingWallets.length > 0 ? matchingWallets : "No matching wallets found.");
+}
+
+processTraits();

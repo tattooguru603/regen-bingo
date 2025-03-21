@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFT Bingo Card</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #bingoGrid { display: grid; grid-template-columns: repeat(5, 100px); grid-gap: 5px; justify-content: center; margin-top: 20px; }
+        .bingoCell { width: 100px; height: 100px; border: 1px solid black; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: white; cursor: pointer; text-align: center; font-size: 12px; }
+        .bingoCell img { max-width: 80%; max-height: 60%; }
+        .nftSelection { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid black; width: 60%; height: 60%; overflow-y: auto; }
+        .nftGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; justify-content: center; }
+        .nftItem { cursor: pointer; padding: 5px; border: 1px solid #ccc; margin: 5px; text-align: center; }
+        .nftItem img { width: 80px; height: 80px; object-fit: cover; }
+    </style>
+</head>
+<body>
+    <h1>NFT Bingo Card</h1>
+    <input type="text" id="username" placeholder="Enter X Username">
+    <input type="text" id="walletAddress" placeholder="Enter Wallet Address">
+    <button onclick="fetchNFTs()">Load NFTs</button>
+    <p id="status"></p>
+    
+    <div id="bingoGrid"></div>
+    
+    <div id="nftSelection" class="nftSelection">
+        <h3>Select an NFT</h3>
+        <div class="nftGrid" id="nftGridSelection"></div>
+    </div>
+    
+    <script>
+        let availableNFTs = [];
+        let selectedNFTs = {}; // Store selected NFTs for later use
+        let currentCell = null;
+
+        function generateBingoGrid() {
+            const grid = document.getElementById("bingoGrid");
+            grid.innerHTML = "";
+            
+            for (let i = 0; i < 25; i++) {
+                const cell = document.createElement("div");
+                cell.classList.add("bingoCell");
+                
+                if (i === 12) { // Middle space is always "FREE"
+                    cell.textContent = "FREE";
+                } else {
+                    cell.onclick = () => openNFTSelection(cell, i);
+                }
+                
+                grid.appendChild(cell);
+            }
+        }
+
+        function openNFTSelection(cell, index) {
+            if (availableNFTs.length === 0) {
+                alert("No NFTs loaded. Please enter a wallet and load NFTs first.");
+                return;
+            }
+
+            currentCell = { cell, index };
+            const selectionDiv = document.getElementById("nftSelection");
+            const gridSelection = document.getElementById("nftGridSelection");
+            gridSelection.innerHTML = "";
+            
+            availableNFTs.forEach(nft => {
+                const nft_id = nft.image_url.split('/').pop().split('?')[0];
+                if (Object.values(selectedNFTs).includes(nft_id)) return;
+                const item = document.createElement("div");
+                item.classList.add("nftItem");
+                item.innerHTML = `<img src="${nft.image_url}" alt="NFT"><br>${nft_id}`;
+                item.onclick = () => selectNFT(nft);
+                gridSelection.appendChild(item);
+            });
+            
+            selectionDiv.style.display = "block";
+        }
+
+        function selectNFT(nft) {
+            const nft_id = nft.image_url.split('/').pop().split('?')[0];
+            if (Object.values(selectedNFTs).includes(nft_id)) {
+                alert("This NFT has already been selected. Please choose a different one.");
+                return;
+            }
+            if (currentCell) {
+                const { cell, index } = currentCell;
+                selectedNFTs[index] = nft_id; // Store NFT ID for later
+                cell.innerHTML = `<img src="${nft.image_url}" alt="NFT"><br> ${nft_id}`;
+                document.getElementById("nftSelection").style.display = "none";
+            }
+        }
+
+        async function fetchNFTs() {
+            const wallet = document.getElementById("walletAddress").value.trim();
+            const status = document.getElementById("status");
+
+            if (!wallet) {
+                status.textContent = "Please enter a wallet address.";
+                return;
+            }
+
+            status.textContent = "Fetching NFTs...";
+
+            try {
+                const response = await fetch(`/opensea-nfts/${wallet}`);
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                status.textContent = "";
+
+                if (!data.nfts || data.nfts.length === 0) {
+                    status.textContent = "No re:gens found for this wallet.";
+                    return;
+                }
+
+                availableNFTs = data.nfts;
+                generateBingoGrid();
+            } catch (error) {
+                status.textContent = "Error fetching NFTs. Please try again later.";
+                console.error(error);
+            }
+        }
+
+        async function submitBingoCard() {
+            const username = document.getElementById("username").value.trim();
+            const wallet = document.getElementById("walletAddress").value.trim();
+
+            if (!username || !wallet || Object.keys(selectedNFTs).length !== 24) {
+                alert("All fields must be completed before submitting.");
+                return;
+            }
+
+            const bingoData = { "Wallet:": wallet, "X Username:": username, "bingo": selectedNFTs };
+            
+            try {
+                const response = await fetch("http://localhost:3000/save-bingo-card", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(bingoData)
+                });
+                const result = await response.json();
+                alert(result.message);
+                generateBingoGrid();
+                selectedNFTs = {};
+            } catch (error) {
+                alert("Error saving bingo card.");
+                console.error(error);
+            }
+        }
+    </script>
+    <button onclick="submitBingoCard()">Submit Bingo Card</button>
+</body>
+</html>

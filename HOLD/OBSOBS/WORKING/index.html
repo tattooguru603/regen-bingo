@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #bingoGrid { display: grid; grid-template-columns: repeat(5, 60px); gap: 5px; justify-content: center; margin-top: 20px; }
+        .bingoCell { width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border: 1px solid black; font-size: 16px; background-color: white; }
+        .hit { background-color: yellow; }
+        #roundUpdates { margin-top: 20px; text-align: center; }
+        #winnerInfo { margin-top: 20px; font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Bingo Game</h1>
+    <button onclick="startBingo('5INAROW')">5INAROW</button>
+    <button onclick="startBingo('CROSS')">CROSS</button>
+    <button onclick="startBingo('BLACKOUT')">BLACKOUT</button>
+    
+    <div id="bingoGrid"></div>
+    <p id="status"></p>
+    
+    <div id="roundUpdates">
+        <h3>Latest Round Updates</h3>
+        <p id="latestTrait">Trait: None</p>
+        <p id="latestUpdates">Bingo Cards Updated: 0</p>
+        <p id="latestUsers">Updated Users: None</p>
+    </div>
+    
+    <div id="winnerInfo">
+        <p id="winnerMessage"></p>
+        <p id="winnerUsername"></p>
+        <p id="winnerWallet"></p>
+    </div>
+
+    <script>
+        function generateGrid() {
+            const grid = document.getElementById("bingoGrid");
+            grid.innerHTML = "";
+            for (let i = 0; i < 25; i++) {
+                const cell = document.createElement("div");
+                cell.classList.add("bingoCell");
+                cell.textContent = "";
+                grid.appendChild(cell);
+            }
+        }
+
+        function startBingo(condition) {
+    generateGrid(); // Clear the grid when starting a new game
+            document.getElementById("status").textContent = "Running...";
+            document.getElementById("winnerMessage").textContent = "";
+            document.getElementById("winnerUsername").textContent = "";
+            document.getElementById("winnerWallet").textContent = "";
+
+            const eventSource = new EventSource(`http://localhost:3000/run-bingo?condition=${condition}`);
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.message) {
+                    document.getElementById("status").textContent = data.message;
+                    eventSource.close();
+
+                    if (data.winnerUsername && data.winnerWallet) {
+                        document.getElementById("winnerMessage").textContent = "Winner Found!";
+                        document.getElementById("winnerUsername").textContent = `X Username: ${data.winnerUsername}`;
+                        document.getElementById("winnerWallet").textContent = `Wallet: ${data.winnerWallet}`;
+                    }
+                }
+
+                if (data.bingoCard) {
+                    displayBingoCard(data);
+                }
+
+                updateRoundInfo(data);
+            };
+
+            eventSource.onerror = () => {
+                document.getElementById("status").textContent = "Error connecting to server!";
+                eventSource.close();
+            };
+        }
+
+        function displayBingoCard(data) {
+            const grid = document.getElementById("bingoGrid").children;
+            if (!data.bingoCard || Object.keys(data.bingoCard).length === 0) {
+                return;
+            }
+
+            let index = 0;
+            for (let r = 1; r <= 5; r++) {
+                for (let c = 1; c <= 5; c++) {
+                    let key = `R${r},C${c}`;
+                    grid[index].textContent = data.bingoCard[key] || "";
+                    if (data.winningCells && data.winningCells.includes(key)) {
+                        grid[index].classList.add("hit");
+                    }
+                    index++;
+                }
+            }
+        }
+
+        function updateRoundInfo(data) {
+            if (data.latestTrait) {
+                document.getElementById("latestTrait").textContent = `Trait: ${data.latestTrait}`;
+            }
+            document.getElementById("latestUpdates").textContent = `Bingo Cards Updated: ${data.totalUpdatedCards || 0}`;
+            document.getElementById("latestUsers").textContent = `Updated Users: ${data.updatedUsers?.join(", ") || "None"}`;
+        }
+
+        generateGrid();
+    </script>
+</body>
+</html>
