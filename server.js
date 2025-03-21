@@ -62,6 +62,10 @@ app.get("/opensea-nfts/:wallet", async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.redirect("/BingoCardEntry.html");
+});
+
 // ✅ Run bingo game via SSE
 app.get("/run-bingo", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
