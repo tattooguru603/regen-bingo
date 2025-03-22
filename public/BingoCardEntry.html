@@ -134,22 +134,27 @@
             }
 
             const bingoData = { "Wallet:": wallet, "X Username:": username, "bingo": selectedNFTs };
-            
+
+            // Log the bingo data being sent to the backend
+            console.log("Sending Bingo Data:", bingoData);
+
             try {
-                const response = await fetch("http://localhost:3000/save-bingo-card", {
+                const response = await fetch("https://regen-bingo.onrender.com/save-bingo-card", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(bingoData)
                 });
+                
                 const result = await response.json();
                 alert(result.message);
-                generateBingoGrid();
-                selectedNFTs = {};
+                generateBingoGrid(); // Regenerate the Bingo grid
+                selectedNFTs = {}; // Reset selected NFTs after submission
             } catch (error) {
                 alert("Error saving bingo card.");
                 console.error(error);
             }
         }
+
     </script>
     <button onclick="submitBingoCard()">Submit Bingo Card</button>
 </body>
